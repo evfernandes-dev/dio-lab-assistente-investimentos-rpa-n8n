@@ -146,6 +146,7 @@ O fluxo completo está em [`n8n/workflow.json`](n8n/workflow.json):
 
 ### Demonstração
 
+- [`docs/demo.mp4`](docs/demo.mp4): vídeo do fluxo rodando de ponta a ponta (RPA → N8N → Gemini → Gmail).
 - [`docs/demo.png`](docs/demo.png): print com os clientes extraídos e as mensagens geradas.
 - [`docs/demo.md`](docs/demo.md): detalhes da execução (IDs, tempos e resultados).
 
