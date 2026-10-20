@@ -120,34 +120,65 @@ Conecte o Agente de IA do N8N a um modelo como Gemini ou GPT para:
 - Gerar mensagens únicas e personalizadas
 - Criar recomendações mais inteligentes e humanizadas
 
+## Solução implementada
+
+O fluxo completo está em [`n8n/workflow.json`](n8n/workflow.json):
+
+`Webhook (POST /webhook/clientes)` → `HTTP Request (data.csv)` → `Code (parse CSV)` → `Merge` → `Code1 (cruza perfil x investimentos)` → `Code2 (normaliza campos e saldo)` → `Message a model (Google Gemini)` → `Code3 (padroniza assunto/mensagem e valida e-mail)` → `If (email_valido)` → `Gmail (envia a recomendação)`.
+
+### Decisões técnicas
+
+- **Gemini 3.5 Flash Lite** no node `Message a model` por ser gratuito, rápido e suficiente para mensagens curtas.
+- **Mensagem estática + IA**: o `Code2` já monta `mensagem_base` (template por perfil). O Gemini gera a versão personalizada e o `Code3` normaliza o texto final (remove markdown, espaços e valida o e-mail).
+- **Validação de e-mail**: o `If` envia apenas quando `email_valido = true`; e-mails inválidos não são disparados.
+- **Formato do payload**: o RPA envia `{"clientes": [...]}`; o Webhook e o `Code1` esperam esse formato.
+- **Sem credenciais no repositório**: o `workflow.json` foi exportado sem as credenciais. Ao importar, selecione sua credencial do Gemini e (opcionalmente) do Gmail.
+- **E-mails fictícios**: a página usa endereços como `ana@email.com`. Para demonstrar o envio real sem bounce, substitua o e-mail de um cliente pelo seu durante o teste.
+
+### Como executar
+
+1. Importe `n8n/workflow.json` no N8N e selecione as credenciais do **Google Gemini** e do **Gmail** (o Gmail é opcional para o MVP).
+2. Ative o workflow e confirme que o Webhook está em `POST /webhook/clientes`.
+3. Abra `src/extrair_clientes.ipynb` (local ou Colab), ajuste `N8N_WEBHOOK` se necessário e execute.
+4. O notebook imprime os clientes extraídos e a resposta do N8N.
+
+> O GitHub Pages do fork ainda não está habilitado (a URL retorna 404). Para usar a página do seu repositório, ative em **Settings → Pages → Deploy from a branch → main /docs**. Enquanto isso, o notebook usa a página oficial da DIO.
+
+### Demonstração
+
+- [`docs/demo.png`](docs/demo.png): print com os clientes extraídos e as mensagens geradas.
+- [`docs/demo.md`](docs/demo.md): detalhes da execução (IDs, tempos e resultados).
+
 ## Entregáveis
 
 ### MVP (Mínimo Viável)
 
-- [ ] Repositório forkado com o workflow N8N implementado
-- [ ] Workflow N8N exportado (`n8n/workflow.json`) com mensagens estáticas
-- [ ] Script de RPA integrado ao Webhook do N8N
-- [ ] Print ou vídeo demonstrando o fluxo funcionando de ponta a ponta
+- [x] Repositório forkado com o workflow N8N implementado
+- [x] Workflow N8N exportado (`n8n/workflow.json`) com mensagens estáticas
+- [x] Script de RPA integrado ao Webhook do N8N
+- [x] Print ou vídeo demonstrando o fluxo funcionando de ponta a ponta
 
 ### Desafio Completo
 
-- [ ] Todos os itens do MVP
-- [ ] Integração com Agente de IA no N8N
-- [ ] Mensagens geradas dinamicamente via LLM
-- [ ] Documentação explicando as decisões técnicas
+- [x] Todos os itens do MVP
+- [x] Integração com Agente de IA no N8N
+- [x] Mensagens geradas dinamicamente via LLM
+- [x] Documentação explicando as decisões técnicas
 
 ## Estrutura do Repositório
 
 ```
-📁 dio-lab-assistente-investimentos-rpa-n8n/
-├── 📄 README.md
-├── 📁 src/
-│   └── 📄 extrair_clientes.ipynb   # ✅ Notebook Python (já implementado, falta só o TODO)
-├── 📁 n8n/
-│   └── 📄 workflow.json            # 🎯 Seu desafio: exportar o workflow aqui
-└── 📁 docs/
-    ├── 📄 index.html               # ✅ Página de clientes (já implementado)
-    └── 📄 data.csv                 # ✅ Opções de investimento (já implementado)
+dio-lab-assistente-investimentos-rpa-n8n/
+├── README.md
+├── src/
+│   └── extrair_clientes.ipynb   # RPA integrado ao Webhook
+├── n8n/
+│   └── workflow.json            # Workflow exportado (sem credenciais)
+└── docs/
+    ├── index.html
+    ├── data.csv
+    ├── demo.png                 # Print da execução
+    └── demo.md                  # Detalhes da demonstração
 ```
 
 ## Prompts Úteis para Copilotos de IA

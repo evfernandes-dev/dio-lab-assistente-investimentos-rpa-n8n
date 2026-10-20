@@ -1,0 +1,324 @@
+{
+  "name": "DIO TESTE FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clientes",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "4a3b4b9e-3e36-4d5d-bf87-7c40069a0461",
+      "name": "Webhook",
+      "webhookId": "447d5df0-7036-4323-989f-d9554fec56b5",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -16,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "id": "6b6cd2f8-78ae-41ea-89f3-04e9542f4034",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        208,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const csv = $input.first().json.data;\nconst linhas = String(csv).trim().split('\\n');\nconst header = linhas[0].split(',').map(h => h.trim());\nreturn linhas.slice(1).filter(l => l.trim() !== '').map(linha => {\n  const cols = linha.split(',');\n  const item = {};\n  header.forEach((h, i) => { item[h] = (cols[i] || '').trim(); });\n  return { json: item };\n});"
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "a5cc4504-8f8f-4a8b-b746-e870bef4cb2b",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2352,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "7d284bbe-8785-40a2-8ecf-333d0c2c0b14",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        -896
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itens = $input.all();\n\nconst mapa = new Map();\nfor (const item of itens) {\n  const j = item.json;\n  const clientes = (j.body && Array.isArray(j.body.clientes)) ? j.body.clientes : [];\n  const investimento = j.produto ? {\n    perfil: j.perfil,\n    produto: j.produto,\n    minimo: j.minimo,\n    rentabilidade: j.rentabilidade,\n  } : null;\n\n  for (const c of clientes) {\n    if (!mapa.has(c.email)) {\n      mapa.set(c.email, {\n        nome: c.nome,\n        email: c.email,\n        saldo: c.saldo,\n        perfil: c.perfil,\n        investimentos: [],\n      });\n    }\n    if (investimento) mapa.get(c.email).investimentos.push(investimento);\n  }\n}\n\nconst resultado = [];\nfor (const c of mapa.values()) {\n  const recomendados = c.investimentos.filter(i => i.perfil === c.perfil);\n  const linhas = recomendados\n    .map(i => `- ${i.produto} (aporte minimo: R$ ${i.minimo}, rentabilidade: ${i.rentabilidade})`)\n    .join('\\n');\n  const mensagem =\n    `Ola, ${c.nome}! Seu perfil de investidor e ${c.perfil} e seu saldo atual e ${c.saldo}.\\n` +\n    `Com base no seu perfil, separamos as seguintes opcoes:\\n${linhas}\\n` +\n    `Conte conosco para investir melhor!`;\n\n  resultado.push({\n    json: {\n      nome: c.nome,\n      email: c.email,\n      perfil: c.perfil,\n      saldo: c.saldo,\n      recomendados,\n      mensagem,\n    },\n  });\n}\n\nreturn resultado;"
+      },
+      "id": "adf47f51-5fc1-4c60-a1b3-b65579ffd18c",
+      "name": "Code in JavaScript1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MOTIVOS = {\n  Conservador: 'Perfil conservador: prioriza seguranca, liquidez e baixa exposicao a risco.',\n  Moderado: 'Perfil moderado: busca equilibrio entre seguranca e rentabilidade.',\n  Arrojado: 'Perfil arrojado: aceita maior risco em busca de retornos mais altos.',\n};\n\nconst COPY_RULES = 'Tom consultivo e cordial; frases curtas; nao prometer rentabilidade; destacar seguranca, liquidez e diversificacao; encerrar com convite a acao.';\n\nfunction parseSaldo(valor) {\n  if (typeof valor === 'number') return valor;\n  const limpo = String(valor).replace(/[^0-9,.-]/g, '');\n  const normalizado = limpo.replace(/\\./g, '').replace(',', '.');\n  const numero = parseFloat(normalizado);\n  return isNaN(numero) ? null : numero;\n}\n\nconst tabela = $input.all().map((item) => {\n  const j = item.json;\n  const recomendados = Array.isArray(j.recomendados) ? j.recomendados : [];\n  return {\n    json: {\n      email: j.email,\n      nome: j.nome,\n      perfil: j.perfil,\n      saldo: j.saldo,\n      extra: recomendados\n        .map(r => `${r.produto} (minimo: R$ ${r.minimo}, rentabilidade: ${r.rentabilidade})`)\n        .join('; '),\n      saldo_num: parseSaldo(j.saldo),\n      recomendacao: recomendados.map(r => r.produto).join('; '),\n      motivo: MOTIVOS[j.perfil] || 'Recomendacao alinhada ao perfil do cliente.',\n      mensagem_base: j.mensagem,\n      copy_rules: COPY_RULES,\n    },\n  };\n});\n\ntabela.sort((a, b) => (a.json.perfil + a.json.nome).localeCompare(b.json.perfil + b.json.nome));\n\nreturn tabela;"
+      },
+      "id": "50e67d6a-c0d3-4f8c-b6a2-61827409028c",
+      "name": "Code in JavaScript2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-3.5-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ \"Gere a mensagem final para este cliente seguindo as regras de copy.\\n\\nNome: \" + $json.nome + \"\\nPerfil: \" + $json.perfil + \"\\nSaldo: \" + $json.saldo + \"\\nRecomendacao: \" + $json.recomendacao + \"\\nMotivo: \" + $json.motivo + \"\\nMensagem base: \" + $json.mensagem_base + \"\\nRegras de copy: \" + $json.copy_rules }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "includeMergedResponse": true,
+          "systemMessage": "Voce e um assistente financeiro consultivo. Responda apenas com a mensagem final, sem titulos nem explicacoes.",
+          "maxOutputTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "id": "99999999-9999-4999-8999-999999999999",
+      "name": "Message a model",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        -832
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itens = $input.all();\n\nfunction normalizarEmail(valor) {\n  let email = String(valor || '').trim().toLowerCase();\n  const match = email.match(/<([^>]+)>/);\n  if (match) email = match[1];\n  email = email.replace(/^mailto:/, '').replace(/\\s+/g, '');\n  return email;\n}\n\nfunction emailValido(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email);\n}\n\nfunction normalizarTexto(valor) {\n  return String(valor || '')\n    .replace(/\\r\\n/g, '\\n')\n    .replace(/\\r/g, '\\n')\n    .replace(/[ \\t]+\\n/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .replace(/\\*\\*(.*?)\\*\\*/g, '$1')\n    .replace(/[*_`#]/g, '')\n    .replace(/[ \\t]{2,}/g, ' ')\n    .trim();\n}\n\nfunction normalizarPerfil(valor) {\n  const p = String(valor || '').trim().toLowerCase();\n  if (p.startsWith('conserv')) return 'Conservador';\n  if (p.startsWith('moder')) return 'Moderado';\n  if (p.startsWith('arroj')) return 'Arrojado';\n  return String(valor || '').trim();\n}\n\nfunction normalizarNome(valor) {\n  return String(valor || '')\n    .trim()\n    .replace(/\\s+/g, ' ')\n    .replace(/\\b\\w/g, (c) => c.toUpperCase());\n}\n\nconst baseItens = $('Code in JavaScript2').all();\n\nreturn itens.map((item, i) => {\n  const gemini = item.json || {};\n  const base = (baseItens[i] && baseItens[i].json) || {};\n  const email = normalizarEmail(base.email);\n  const nome = normalizarNome(base.nome);\n  const mensagem = normalizarTexto(gemini.mergedResponse || gemini.text || base.mensagem_base || '');\n  const valido = emailValido(email);\n\n  return {\n    json: {\n      email,\n      nome,\n      perfil: normalizarPerfil(base.perfil),\n      saldo: base.saldo,\n      assunto: 'Sua recomendacao de investimento, ' + nome,\n      mensagem,\n      email_valido: valido,\n      erro: valido ? null : 'E-mail invalido ou ausente',\n    },\n  };\n});"
+      },
+      "id": "af35533a-4eb2-4ad8-beba-39ee1dc20ea9",
+      "name": "Code in JavaScript3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -544
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.assunto }}",
+        "emailType": "text",
+        "message": "={{ $json.mensagem }}",
+        "options": {}
+      },
+      "id": "ab6ea611-38ee-4811-a204-cb31a2fd8c42",
+      "name": "Send a message",
+      "webhookId": "b81183ce-dea6-43a4-baca-65ab35820a7e",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        -576
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c52510e2-f2b9-4e6f-8e8d-42a50b7576d8",
+              "leftValue": "={{ $json.email_valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a5389506-b734-4687-b2ba-8c7437db4aec",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1856,
+        -544
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  }
+}
